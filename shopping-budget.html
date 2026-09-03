@@ -99,7 +99,7 @@
     border:none;
     border-bottom:1px solid var(--line);
     outline:none;
-    font-size:15px;
+    font-size:16px;
     padding:4px 2px;
     background:transparent;
     color:var(--text);
@@ -126,7 +126,7 @@
     border:none;
     border-bottom:1px solid var(--line);
     outline:none;
-    font-size:14px;
+    font-size:16px;
     padding:4px 2px;
     background:transparent;
     color:var(--text);
@@ -173,7 +173,7 @@
 
   <div class="budget-card">
     <label for="budget">예산</label>
-    <input type="number" id="budget" class="budget-input" placeholder="0" inputmode="numeric">
+    <input type="number" id="budget" class="budget-input" placeholder="0" inputmode="numeric" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
   </div>
 
   <div class="summary">
@@ -194,64 +194,97 @@
 </div>
 
 <script>
+// 아이폰 사파리에서 입력할 때마다 DOM을 통째로 새로 그리면
+// 입력창이 새로 생성되면서 키보드 포커스가 끊긴다.
+// 그래서 "항목 추가/삭제"할 때만 리스트 전체를 다시 그리고,
+// 글자 입력(oninput)할 때는 기존 DOM은 그대로 두고 소계/총액 숫자만 갱신한다.
+// 추가로 자동완성/맞춤법 제안 바가 레이아웃을 흔들며 포커스를 끊는 것도
+// 예방하기 위해 모든 입력창에 autocomplete/autocorrect/spellcheck를 꺼둔다.
+
 let items = [];
 let idCounter = 0;
 
 function addItem(){
   items.push({id: idCounter++, name:'', price:'', qty:'', checked:true});
-  render();
+  renderList();
 }
 
 function removeItem(id){
   items = items.filter(it => it.id !== id);
-  render();
-}
-
-function updateItem(id, field, value){
-  const it = items.find(i => i.id === id);
-  if(it) it[field] = value;
-  render();
+  renderList();
 }
 
 function formatWon(n){
   return Math.round(n).toLocaleString('ko-KR') + '원';
 }
 
-function render(){
+// 항목 추가/삭제 시에만 호출: 리스트 DOM을 전체 재생성
+function renderList(){
   const list = document.getElementById('itemList');
   const emptyMsg = document.getElementById('emptyMsg');
   list.innerHTML = '';
 
-  if(items.length === 0){
-    emptyMsg.style.display = 'block';
-  }else{
-    emptyMsg.style.display = 'none';
-  }
-
-  let total = 0;
+  emptyMsg.style.display = items.length === 0 ? 'block' : 'none';
 
   items.forEach(it => {
-    const price = parseFloat(it.price) || 0;
-    const qty = parseFloat(it.qty) || 0;
-    const subtotal = price * qty;
-    if(it.checked) total += subtotal;
-
     const div = document.createElement('div');
-    div.className = 'item' + (it.checked ? '' : ' excluded');
+    div.className = 'item';
+    div.dataset.id = it.id;
     div.innerHTML = `
       <div class="item-top">
-        <input type="checkbox" ${it.checked ? 'checked' : ''} onchange="updateItem(${it.id}, 'checked', this.checked)">
-        <input type="text" class="item-name" placeholder="항목명 (예: 우유)" value="${it.name}" oninput="updateItem(${it.id}, 'name', this.value)">
-        <button class="del-btn" onclick="removeItem(${it.id})">✕</button>
+        <input type="checkbox" class="chk" ${it.checked ? 'checked' : ''}>
+        <input type="text" class="item-name" placeholder="항목명 (예: 우유)" value="${it.name}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button type="button" class="del-btn">✕</button>
       </div>
       <div class="item-nums">
-        <input type="number" placeholder="단가" inputmode="numeric" value="${it.price}" oninput="updateItem(${it.id}, 'price', this.value)">
+        <input type="number" class="price" placeholder="단가" inputmode="numeric" value="${it.price}" autocomplete="off">
         <span class="x">×</span>
-        <input type="number" placeholder="갯수" inputmode="numeric" value="${it.qty}" oninput="updateItem(${it.id}, 'qty', this.value)">
+        <input type="number" class="qty" placeholder="갯수" inputmode="numeric" value="${it.qty}" autocomplete="off">
       </div>
-      <div class="item-subtotal">소계 <b>${formatWon(subtotal)}</b></div>
+      <div class="item-subtotal">소계 <b class="subtotal-val">0원</b></div>
     `;
+
+    const chk = div.querySelector('.chk');
+    const nameInput = div.querySelector('.item-name');
+    const priceInput = div.querySelector('.price');
+    const qtyInput = div.querySelector('.qty');
+    const delBtn = div.querySelector('.del-btn');
+
+    chk.addEventListener('change', () => {
+      it.checked = chk.checked;
+      div.classList.toggle('excluded', !it.checked);
+      updateTotals();
+    });
+    nameInput.addEventListener('input', () => { it.name = nameInput.value; });
+    priceInput.addEventListener('input', () => { it.price = priceInput.value; updateItemSubtotal(div, it); updateTotals(); });
+    qtyInput.addEventListener('input', () => { it.qty = qtyInput.value; updateItemSubtotal(div, it); updateTotals(); });
+    delBtn.addEventListener('click', () => removeItem(it.id));
+
+    div.classList.toggle('excluded', !it.checked);
     list.appendChild(div);
+    updateItemSubtotal(div, it);
+  });
+
+  updateTotals();
+}
+
+// 글자/숫자 입력할 때 호출: 해당 카드의 소계 텍스트만 갱신 (DOM 재생성 없음)
+function updateItemSubtotal(div, it){
+  const price = parseFloat(it.price) || 0;
+  const qty = parseFloat(it.qty) || 0;
+  const subtotal = price * qty;
+  div.querySelector('.subtotal-val').textContent = formatWon(subtotal);
+}
+
+// 총액/잔액만 갱신 (리스트 DOM은 건드리지 않음)
+function updateTotals(){
+  let total = 0;
+  items.forEach(it => {
+    if(it.checked){
+      const price = parseFloat(it.price) || 0;
+      const qty = parseFloat(it.qty) || 0;
+      total += price * qty;
+    }
   });
 
   document.getElementById('totalVal').textContent = formatWon(total);
@@ -264,7 +297,7 @@ function render(){
 }
 
 document.getElementById('addBtn').addEventListener('click', addItem);
-document.getElementById('budget').addEventListener('input', render);
+document.getElementById('budget').addEventListener('input', updateTotals);
 
 // 초기 항목 하나 추가
 addItem();
