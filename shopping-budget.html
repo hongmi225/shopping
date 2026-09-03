@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>장보기 예산 계산기</title>
+<style>
+  :root{
+    --bg: #FBF3EC;
+    --card: #FFFFFF;
+    --salmon: #E8846B;
+    --salmon-dark: #D46B50;
+    --text: #4A3B33;
+    --muted: #9C8A7E;
+    --line: #EDE0D4;
+    --danger: #C65B4E;
+    --safe: #4F8F72;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    font-family:-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    color:var(--text);
+    padding:20px 14px 60px;
+  }
+  .wrap{max-width:520px; margin:0 auto;}
+  h1{
+    font-size:20px;
+    font-weight:700;
+    margin:4px 0 18px;
+    letter-spacing:-0.3px;
+  }
+  .budget-card{
+    background:var(--card);
+    border-radius:16px;
+    padding:16px;
+    margin-bottom:16px;
+    box-shadow:0 2px 10px rgba(180,140,110,0.10);
+  }
+  .budget-card label{
+    font-size:13px;
+    color:var(--muted);
+    display:block;
+    margin-bottom:6px;
+  }
+  .budget-input{
+    width:100%;
+    font-size:22px;
+    font-weight:700;
+    border:none;
+    outline:none;
+    background:transparent;
+    color:var(--salmon-dark);
+    padding:0;
+  }
+  .budget-input::placeholder{color:#D9C6B8;}
+
+  .summary{
+    display:flex;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .summary-box{
+    flex:1;
+    background:var(--card);
+    border-radius:14px;
+    padding:12px 14px;
+    box-shadow:0 2px 10px rgba(180,140,110,0.08);
+  }
+  .summary-box .label{font-size:12px; color:var(--muted); margin-bottom:4px;}
+  .summary-box .value{font-size:18px; font-weight:700;}
+  .summary-box.remain .value.over{color:var(--danger);}
+  .summary-box.remain .value.ok{color:var(--safe);}
+
+  .item-list{margin-bottom:12px;}
+  .item{
+    background:var(--card);
+    border-radius:14px;
+    padding:12px;
+    margin-bottom:10px;
+    box-shadow:0 2px 10px rgba(180,140,110,0.08);
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .item-top{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .item-top input[type="checkbox"]{
+    width:18px; height:18px;
+    accent-color:var(--salmon);
+    flex-shrink:0;
+  }
+  .item-name{
+    flex:1;
+    border:none;
+    border-bottom:1px solid var(--line);
+    outline:none;
+    font-size:15px;
+    padding:4px 2px;
+    background:transparent;
+    color:var(--text);
+  }
+  .item-name::placeholder{color:#C9BAAE;}
+  .del-btn{
+    border:none;
+    background:none;
+    color:var(--muted);
+    font-size:18px;
+    line-height:1;
+    padding:2px 4px;
+    cursor:pointer;
+  }
+  .item-nums{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding-left:26px;
+  }
+  .item-nums input[type="number"]{
+    width:0;
+    flex:1;
+    border:none;
+    border-bottom:1px solid var(--line);
+    outline:none;
+    font-size:14px;
+    padding:4px 2px;
+    background:transparent;
+    color:var(--text);
+    -moz-appearance:textfield;
+  }
+  .item-nums input::-webkit-outer-spin-button,
+  .item-nums input::-webkit-inner-spin-button{
+    -webkit-appearance:none; margin:0;
+  }
+  .item-nums .x{color:var(--muted); font-size:13px;}
+  .item-subtotal{
+    padding-left:26px;
+    font-size:13px;
+    color:var(--muted);
+  }
+  .item-subtotal b{color:var(--text);}
+  .item.excluded{opacity:0.45;}
+
+  .add-btn{
+    width:100%;
+    padding:13px;
+    border:1.5px dashed var(--salmon);
+    background:transparent;
+    color:var(--salmon-dark);
+    border-radius:14px;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+    margin-bottom:8px;
+  }
+  .add-btn:active{background:#FCEEE8;}
+
+  .empty{
+    text-align:center;
+    color:var(--muted);
+    font-size:13px;
+    padding:20px 0;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🛒 장보기 예산 계산기</h1>
+
+  <div class="budget-card">
+    <label for="budget">예산</label>
+    <input type="number" id="budget" class="budget-input" placeholder="0" inputmode="numeric">
+  </div>
+
+  <div class="summary">
+    <div class="summary-box">
+      <div class="label">총액</div>
+      <div class="value" id="totalVal">0원</div>
+    </div>
+    <div class="summary-box remain">
+      <div class="label">잔액</div>
+      <div class="value ok" id="remainVal">0원</div>
+    </div>
+  </div>
+
+  <div class="item-list" id="itemList"></div>
+  <div class="empty" id="emptyMsg">항목을 추가해보세요</div>
+
+  <button class="add-btn" id="addBtn">+ 항목 추가</button>
+</div>
+
+<script>
+let items = [];
+let idCounter = 0;
+
+function addItem(){
+  items.push({id: idCounter++, name:'', price:'', qty:'', checked:true});
+  render();
+}
+
+function removeItem(id){
+  items = items.filter(it => it.id !== id);
+  render();
+}
+
+function updateItem(id, field, value){
+  const it = items.find(i => i.id === id);
+  if(it) it[field] = value;
+  render();
+}
+
+function formatWon(n){
+  return Math.round(n).toLocaleString('ko-KR') + '원';
+}
+
+function render(){
+  const list = document.getElementById('itemList');
+  const emptyMsg = document.getElementById('emptyMsg');
+  list.innerHTML = '';
+
+  if(items.length === 0){
+    emptyMsg.style.display = 'block';
+  }else{
+    emptyMsg.style.display = 'none';
+  }
+
+  let total = 0;
+
+  items.forEach(it => {
+    const price = parseFloat(it.price) || 0;
+    const qty = parseFloat(it.qty) || 0;
+    const subtotal = price * qty;
+    if(it.checked) total += subtotal;
+
+    const div = document.createElement('div');
+    div.className = 'item' + (it.checked ? '' : ' excluded');
+    div.innerHTML = `
+      <div class="item-top">
+        <input type="checkbox" ${it.checked ? 'checked' : ''} onchange="updateItem(${it.id}, 'checked', this.checked)">
+        <input type="text" class="item-name" placeholder="항목명 (예: 우유)" value="${it.name}" oninput="updateItem(${it.id}, 'name', this.value)">
+        <button class="del-btn" onclick="removeItem(${it.id})">✕</button>
+      </div>
+      <div class="item-nums">
+        <input type="number" placeholder="단가" inputmode="numeric" value="${it.price}" oninput="updateItem(${it.id}, 'price', this.value)">
+        <span class="x">×</span>
+        <input type="number" placeholder="갯수" inputmode="numeric" value="${it.qty}" oninput="updateItem(${it.id}, 'qty', this.value)">
+      </div>
+      <div class="item-subtotal">소계 <b>${formatWon(subtotal)}</b></div>
+    `;
+    list.appendChild(div);
+  });
+
+  document.getElementById('totalVal').textContent = formatWon(total);
+
+  const budget = parseFloat(document.getElementById('budget').value) || 0;
+  const remain = budget - total;
+  const remainEl = document.getElementById('remainVal');
+  remainEl.textContent = (remain < 0 ? '-' : '') + formatWon(Math.abs(remain));
+  remainEl.className = 'value ' + (remain < 0 ? 'over' : 'ok');
+}
+
+document.getElementById('addBtn').addEventListener('click', addItem);
+document.getElementById('budget').addEventListener('input', render);
+
+// 초기 항목 하나 추가
+addItem();
+</script>
+</body>
+</html>
